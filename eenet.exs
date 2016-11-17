@@ -1,12 +1,7 @@
 defmodule EENET do
 
   # EENET
-  def start(username) do
-    server = spawn(EENET, :init, [username])
-    Process.register(client, EENET)
-
-    server
-  end
+  def start(username), do: spawn(__MODULE__, :init, [username])
 
   def connect(node) do
     Node.connect(node)
@@ -18,21 +13,32 @@ defmodule EENET do
 
   # Server
   def init(username) do
-    loop(username)
+    Process.register(self, EENET)
+    initial_state = %{username: username}
+
+    loop(initial_state)
   end
 
-  def loop(username) do
+  def display_message(from, msg) do
+    IO.puts(~s{#{from}: #{msg}})
+  end
+
+  def broadcast(from, msg) do
+    nodes = Enum.map(Node.list, &({EENET, &1}))
+    Enum.each(nodes, fn(node) -> Kernel.send(node, {:new_msg, from, msg}) end)
+  end
+
+  def loop(state) do
     receive do
       {:send, msg} ->
-        IO.puts(~s{#{username}: #{msg}})
-        nodes = Enum.map(Node.list, &({EENET, &1}))
-        Enum.each(nodes, fn(node) -> Kernel.send(node, {:new_msg, username, msg}) end)
-
-        loop(username)
+        username = state.username
+        broadcast(username, msg)
+        display_message(username, msg)
+        loop(state)
 
       {:new_msg, from, msg} ->
-        IO.puts(~s{#{from}: #{msg}})
-        loop(username)
+        display_message(from, msg)
+        loop(state)
 
     end
   end
